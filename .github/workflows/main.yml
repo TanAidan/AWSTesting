@@ -1,0 +1,41 @@
+# define the name of the action, use this to identify workflow
+name: deploy to lambda
+#The trigger to deploy this workflow, in this case its pushing code to the repo
+on: [push]
+jobs:
+  deploy_source:
+    name: build and deploy lambda
+    strategy:
+      matrix:
+        node-version: [12.x]
+    runs-on: ubuntu-latest
+    steps:
+      #checks out all the code from a github repo
+      - uses: actions/checkout@v1
+      #downloads node on the Ubuntu machine
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v1
+        with:
+          node-version: ${{ matrix.node-version }}
+      #runs npm ci and build, useful for npm dependencies
+      - name: npm install and build
+        run: |
+          npm ci
+          npm run build --if-present
+        env:
+          CI: true
+      #Zips everything into a file
+      - name: zip
+        uses: montudor/action-zip@v0.1.0
+        with:
+          args: zip -qq -r ./bundle.zip ./
+     # deploys the bundle.zip tothe lambda
+      - name: default deploy
+        uses: appleboy/lambda-action@master
+        with:
+          #Not hardcoded bc of security, we will add the secrets in the github repo
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_region: eu-west-1
+          function_name: my-function
+          zip_file: bundle.zip
